@@ -6,30 +6,35 @@ or "agent", people search the account number and see whether others have reporte
 Separate from the Semak Mule project. Not affiliated with PDRM, BNM or any bank.
 
 ## Features
-- **Search any account number** (all banks + e-wallets). Shows a risk level, the number of reports, how many
-  *different* people reported, total RM lost, community votes and search count.
-- **Report a scam account**: bank, name on the account, scam type, platform, amount, date and what happened.
-- **Community votes**: "It was legit" / "It was a scam". Legit votes balance out wrong reports.
-- **Disputes**: account owners can challenge reports, and moderators can clear the account.
-- **Moderation panel** at `/#/admin`: hide or restore reports, approve or reject disputes.
-- Home page: stats, a live feed of the latest reports and the most common scam types.
+- **Search any account number** (all banks and e-wallets). The page shows how many *different* users reported
+  problems, what they described, and how many users said their deal was fine.
+- **Report an account**: a police report or NSRC reference number is required. Every report is
+  **reviewed by a moderator before it is published**.
+- **"This is my account"**: account holders can dispute reports. While a dispute is open, reports from fewer than
+  3 users are hidden. Disputes are decided within 14 days.
+- **Moderation panel** at `/#/admin`: a review queue, disputes, hiding and restoring reports, and a
+  **log of every action with its reason**.
+- **Terms of Use** and a **Privacy Notice in English and Bahasa Melayu** at `/#/terms` and `/#/privacy`.
+  Both are drafts for a lawyer to review. Set `LEGAL_DRAFT = false` in `public/app.js` after the review.
 
-## Protecting innocent people
-- Risk is based on **distinct reporters**, so one person can't push an account to "High risk" alone.
-- Names are always partly hidden (`AH*** B** AL*`). The public feed hides most of the account number.
-  The full number is only shown to someone who typed it in.
-- Phone numbers, emails and IC numbers are removed from descriptions automatically.
-- Reporter IPs are never stored, only a salted one-way hash used for spam limits.
-- Rate limits: 5 reports/hour, 1 report per account per day, a hidden honeypot field to catch bots,
-  and a required "this is truthful" checkbox.
-- Strict security headers (CSP, nosniff, frame-deny). All user text is shown as plain text, never as HTML.
+## Legal safeguards (from the legal-banking-advisor review)
+- **Neutral wording**: the site never says "scam" or "scammer". Labels read "Reported by N different users",
+  and every report is marked "Unverified allegation by a member of the public".
+- **Labels count only distinct users whose reports were approved.** Votes cannot make a label worse.
+- **Private by default**: the name at transfer and the police reference are seen by moderators only.
+  The public feed hides most of each account number. Phone, email and IC numbers in descriptions are removed automatically.
+- **Data retention (PDPA)**: search logs are kept 90 days, dispute emails are deleted 30 days after the decision,
+  and published reports expire after about 2 years.
+- **Never charge to remove a report**: this is stated in the Terms and on the dispute page.
+- The server refuses to start without a proper `HASH_SALT`. Reporter IPs are never stored, only a salted hash of them.
+- Rate limits, one report per account per day, and a hidden honeypot field to catch bots.
 
 ## Run it
 Requires **Node.js 22.5+**. There are no dependencies to install because it uses the built-in `node:sqlite`.
 
 ```bash
 npm run seed      # optional: add demo data (account numbers start with 0000)
-ADMIN_TOKEN=choose-a-long-secret HASH_SALT=another-secret npm start
+ADMIN_TOKEN=choose-a-long-secret HASH_SALT=another-long-secret CONTACT_EMAIL=you@example.com OPERATOR_NAME="Your Company Sdn Bhd" npm start
 ```
 Open http://localhost:3000 and try account `000011223344`.
 
@@ -37,7 +42,9 @@ Open http://localhost:3000 and try account `000011223344`.
 |---|---|
 | `PORT` | Default 3000 |
 | `ADMIN_TOKEN` | Turns on the moderation panel (`/#/admin`) |
-| `HASH_SALT` | Secret salt for IP hashing. **Set this in production** |
+| `HASH_SALT` | **Required.** Secret salt for IP hashing (8+ characters) |
+| `CONTACT_EMAIL` | Shown for disputes, legal notices and privacy requests |
+| `OPERATOR_NAME` | Legal name of the operator (e.g. your Sdn Bhd), shown in the Terms and Privacy Notice |
 | `TRUST_PROXY=1` | Use `X-Forwarded-For` when the app runs behind Nginx or Cloudflare |
 | `DATA_DIR` | Where the SQLite file is stored (default `./data`) |
 
@@ -52,3 +59,9 @@ Put it behind HTTPS and set `TRUST_PROXY=1`.
 - `db.js`: SQLite schema
 - `seed.js`: demo data
 - `public/`: front end (plain HTML, CSS and JS, no build step)
+
+### Windows (PowerShell)
+```
+npm.cmd run seed
+$env:ADMIN_TOKEN="choose-a-long-secret"; $env:HASH_SALT="another-long-secret"; $env:CONTACT_EMAIL="you@example.com"; npm.cmd start
+```

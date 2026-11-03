@@ -161,3 +161,14 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .footer b { color: var(--text); }
 .spinner { width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; margin: 40px auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* review / cleared states, labels, owner box */
+.lv-review { background: var(--surface-2); border-color: var(--border); }
+.lv-review .verdict { background: var(--brand); color: var(--brand-ink); }
+.unverified { display: block; margin-top: 6px; font-size: .78rem; color: var(--muted); font-style: italic; }
+.owner-box { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+  background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; padding: 16px; }
+.legal h2 { font-size: 1.1rem; }
+.legal ul { margin: 0; padding-left: 20px; }
+.legal li { margin-bottom: 6px; }
+tr.dim { opacity: .5; }
