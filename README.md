@@ -29,6 +29,24 @@ Separate from the Semak Mule project. Not affiliated with PDRM, BNM or any bank.
 - The server refuses to start without a proper `HASH_SALT`. Reporter IPs are never stored, only a salted hash of them.
 - Rate limits, one report per account per day, and a hidden honeypot field to catch bots.
 
+## Second legal review (fixed)
+- A dispute is accepted only if the account has published reports, and only one dispute can be open per account.
+  It hides only reports made **before** it, and only if fewer than 3 users reported. After a dispute is
+  rejected, a new dispute no longer hides reports.
+- "Earlier reports removed after review" applies only to reports made up to that decision. New reports are published as normal.
+- Retention matches the Privacy Notice:
+  - name at transfer: deleted 30 days after moderation
+  - searches: 90 days
+  - votes: 2 years
+  - reports, disputes and the moderation log: deleted after 6 years (follows the Limitation Act period; confirm with a lawyer)
+- Moderators must give a reason for every action. Named moderators are supported, a logged **Edit** removes
+  names or accusing wording, there is a warning when a description seems to contain the holder's name, and a
+  lockout after 10 wrong tokens.
+- The reported account number and other long numbers are removed from descriptions.
+- "My deal was fine" votes are only possible, and only shown, on accounts that have published reports.
+- The reporter checkboxes are split, with an 18+ rule. The Terms add a publishing licence, an indemnity and sharing with PDRM/NSRC/banks.
+- The demo hint shows only while demo data exists.
+
 ## Run it
 Requires **Node.js 22.5+**. There are no dependencies to install because it uses the built-in `node:sqlite`.
 
@@ -41,7 +59,10 @@ Open http://localhost:3000 and try account `000011223344`.
 | Env var | Purpose |
 |---|---|
 | `PORT` | Default 3000 |
-| `ADMIN_TOKEN` | Turns on the moderation panel (`/#/admin`) |
+| `ADMIN_TOKEN` | Moderator token, shown as "admin" in the log |
+| `MODERATORS` | Named moderators, e.g. `aisyah:long-token-1,ali:long-token-2`, so the log records who did what |
+| `NODE_ENV=production` | Refuses to start until `OPERATOR_NAME` and `CONTACT_EMAIL` are set |
+| `HOSTING_DESC` | Describes your host and region in the Privacy Notice, e.g. `Railway, Singapore region` |
 | `HASH_SALT` | **Required.** Secret salt for IP hashing (8+ characters) |
 | `CONTACT_EMAIL` | Shown for disputes, legal notices and privacy requests |
 | `OPERATOR_NAME` | Legal name of the operator (e.g. your Sdn Bhd), shown in the Terms and Privacy Notice |

@@ -81,5 +81,7 @@ function addColumn(table, column, type) {
 addColumn('reports', 'police_ref', 'TEXT');
 addColumn('reports', 'moderated_at', 'TEXT');
 addColumn('disputes', 'decision_note', 'TEXT');
+addColumn('disputes', 'shield', 'INTEGER NOT NULL DEFAULT 1');   // 0 = do not hide reports while pending (e.g. repeat dispute)
+addColumn('reports', 'original_description', 'TEXT');            // kept when a moderator edits a description
 
 module.exports = db;

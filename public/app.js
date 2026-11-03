@@ -69,15 +69,15 @@ function searchBox(value = '') {
 // Labels describe what users reported. They never call anyone a scammer.
 const LEVELS = {
   high: {
-    icon: '⛔', label: (n) => `Reported by ${n} different users`,
+    icon: '👥', label: (n) => `Reported by ${n} different users`,
     advice: 'Several different people say they lost money after transferring to this account. These reports are not verified by AkaunWatch, but we strongly suggest you do not transfer until you have confirmed who you are paying by other means.',
   },
   medium: {
-    icon: '⚠️', label: () => 'Reported by 2 different users',
+    icon: '👥', label: () => 'Reported by 2 different users',
     advice: 'Two people reported a problem with this account. The reports are not verified. Check the person or seller carefully before paying.',
   },
   low: {
-    icon: '❕', label: () => 'Reported by 1 user',
+    icon: '👤', label: () => 'Reported by 1 user',
     advice: 'One person reported a problem. It may be a misunderstanding or a dispute. Read the report and judge carefully.',
   },
   none: {
@@ -86,18 +86,18 @@ const LEVELS = {
   },
   review: {
     icon: '🕒', label: () => 'Under review',
-    advice: 'The account holder has disputed the reports. Report details are hidden while a moderator reviews the dispute (decision within 14 days).',
+    advice: 'Someone stating they are the account holder has disputed the earlier reports. Those reports are hidden while a moderator reviews the dispute (decision within 14 days). This is not a finding either way.',
   },
   cleared: {
-    icon: '🛡️', label: () => 'Cleared after review',
-    advice: 'Earlier reports on this account were reviewed and removed after the account holder’s dispute.',
+    icon: 'ℹ️', label: () => 'Earlier reports removed after review',
+    advice: 'Earlier reports on this account were removed after a dispute was reviewed. This does not mean AkaunWatch vouches for the account. Stay careful and verify who you are paying.',
   },
 };
 
 function feedItem(r) {
   // The feed only shows masked numbers, so items are not links.
   return h('article', { class: 'feed-item' },
-    h('div', { class: 'dot', 'aria-hidden': 'true' }, '!'),
+    h('div', { class: 'dot', 'aria-hidden': 'true' }, '👥'),
     h('div', {},
       h('div', {}, h('span', { class: 'acc' }, r.account), ' ', h('span', { class: 'tag' }, r.bank), h('span', { class: 'tag' }, r.categoryLabel)),
       h('p', { class: 'desc' }, r.description + (r.description.length >= 160 ? '…' : '')),
@@ -109,6 +109,7 @@ function feedItem(r) {
 
 // ---------- pages ----------
 async function pageHome() {
+  const m = await meta();
   const statsEl = h('div', { class: 'stats' });
   const feedEl = h('div', { class: 'feed' }, spinner());
   const catsEl = h('div', { class: 'bars' });
@@ -118,7 +119,7 @@ async function pageHome() {
       h('h1', {}, 'Check before you transfer.'),
       h('p', {}, 'Search a bank account number to see whether other users have reported problems after transferring money to it.'),
       searchBox(),
-      h('p', { class: 'hint' }, 'Try the demo account ', h('a', { href: '#/check/000011223344' }, '0000 1122 3344'), ' · Numbers only, any bank or e-wallet'),
+      h('p', { class: 'hint' }, m.demo ? ['Demo data loaded: try ', h('a', { href: '#/check/000011223344' }, '0000 1122 3344'), ' · '] : null, 'Numbers only, any bank or e-wallet'),
     ),
     statsEl,
     h('div', { class: 'cols section' },
@@ -163,7 +164,7 @@ function renderResult(d) {
     try { renderResult(await api('/api/votes', { method: 'POST', body: { account: d.account, vote: 'safe' } })); }
     catch (e) { voteMsg.textContent = e.message; btn.disabled = false; }
   };
-  const hasReports = ['high', 'medium', 'low'].includes(d.level);
+  const hasReports = d.stats.reports > 0;
 
   const head = h('section', { class: 'result-head lv-' + d.level },
     h('div', { class: 'verdict' }, h('span', { 'aria-hidden': 'true' }, L.icon), L.label(s.reporters)),
@@ -173,11 +174,11 @@ function renderResult(d) {
     h('div', { class: 'result-meta' },
       hasReports ? h('span', {}, h('b', {}, num(s.reports)), ' published reports from ', h('b', {}, num(s.reporters)), ' different users') : null,
       hasReports && s.totalLost ? h('span', {}, h('b', {}, rm(s.totalLost)), ' in losses described') : null,
-      h('span', {}, h('b', {}, num(s.safeVotes)), ' users said their deal was fine'),
+      hasReports ? h('span', {}, h('b', {}, num(s.safeVotes)), ' users said their deal was fine') : null,
       h('span', {}, 'Searched ', h('b', {}, num(s.searches)), ' times in the last 90 days'),
       d.lastReported ? h('span', {}, 'Last report ', h('b', {}, ago(d.lastReported))) : null,
     ),
-    d.level !== 'cleared' ? h('div', { class: 'vote-row' },
+    hasReports ? h('div', { class: 'vote-row' },
       h('span', { style: 'font-weight:600' }, 'Did you deal with this account and everything was fine?'),
       h('button', { class: 'btn sm ok', onclick: (e) => vote(e.currentTarget) }, '👍 My deal was fine'),
       voteMsg,
@@ -200,15 +201,21 @@ function renderResult(d) {
     }[d.level] || 'No published reports. If you lost money after transferring to this account, make a police or NSRC report first, then tell us.')]),
   );
 
+  const notices = [
+    hasReports && d.underReview ? h('div', { class: 'notice section' }, '🕒 Someone stating they are the account holder has disputed earlier reports. Those earlier reports are hidden while we review. The reports below were made after the dispute.') : null,
+    hasReports && d.earlierRemoved ? h('div', { class: 'notice section' }, 'ℹ️ Earlier reports on this account were removed after review. The reports below were made after that decision.') : null,
+    d.disputePending && !d.underReview && hasReports ? h('div', { class: 'notice section' }, '🕒 The account holder has submitted a dispute that is being reviewed.') : null,
+  ];
   app.replaceChildren(...[
     h('div', { class: 'section' }, searchBox(fmtAcc(d.account))),
     head,
+    ...notices,
     reportsCard,
-    h('div', { class: 'owner-box section' },
+    hasReports ? h('div', { class: 'owner-box section' },
       h('div', {},
         h('b', {}, 'Is this your account?'),
-        h('p', { style: 'margin:4px 0 0' }, 'If these reports are wrong, tell us. While we review, reports from fewer than 3 users are hidden. We never charge to review or remove a report.')),
-      h('a', { class: 'btn ghost', href: '#/dispute/' + d.account }, 'This is my account')),
+        h('p', { style: 'margin:4px 0 0' }, 'If published reports about your account are wrong, tell us. We decide within 14 days and never charge to review or remove a report.')),
+      h('a', { class: 'btn ghost', href: '#/dispute/' + d.account }, 'This is my account')) : null,
     h('div', { class: 'notice section' },
       'AkaunWatch shows what members of the public told us. It is not a police or bank record. Also check the official ',
       h('b', {}, 'Semak Mule'), ' portal by PDRM.'),
@@ -244,16 +251,17 @@ async function pageReport(prefill = '') {
         placeholder: 'Describe what happened to you, step by step. Stick to facts. Do not name or label anyone (e.g. do not write "he is a scammer").' })),
     h('input', { class: 'hp', name: 'website', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true' }),
     h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'confirm', required: true }),
-      h('span', {}, 'I confirm this is my own experience and is true. I have made a police or NSRC report. I am responsible for what I write, and I agree to the ',
-        h('a', { href: '#/terms', target: '_blank' }, 'Terms of Use'), ' and ', h('a', { href: '#/privacy', target: '_blank' }, 'Privacy Notice'),
-        '. I understand false reports can harm innocent people and may be removed.')),
+      h('span', {}, 'I declare that this is my own experience, that it is true to the best of my knowledge, and that I have made a police or NSRC report about it. I understand false reports can harm innocent people.')),
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'agree', required: true }),
+      h('span', {}, 'I am 18 or older (or have a parent\u2019s or guardian\u2019s consent) and I agree to the ',
+        h('a', { href: '#/terms', target: '_blank' }, 'Terms of Use'), ' and the ', h('a', { href: '#/privacy', target: '_blank' }, 'Privacy Notice'), '.')),
     msg,
     h('div', {}, h('button', { class: 'btn', type: 'submit' }, 'Submit for review')),
   );
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = form.querySelector('button[type=submit]');
-    const body = formData(form); body.confirm = !!body.confirm;
+    const body = formData(form); body.confirm = !!body.confirm; body.agree = !!body.agree;
     btn.disabled = true; msg.replaceChildren();
     try {
       await api('/api/reports', { method: 'POST', body });
@@ -300,15 +308,15 @@ async function pageDispute(prefill = '') {
     const body = formData(form); body.consent = !!body.consent;
     btn.disabled = true; msg.replaceChildren();
     try {
-      await api('/api/disputes', { method: 'POST', body });
+      const res = await api('/api/disputes', { method: 'POST', body });
       form.replaceChildren(h('h2', {}, 'Dispute received'),
         h('p', {}, 'We will acknowledge your dispute by email within 2 working days and decide within 14 days. We may ask for proof, such as a bank statement showing the account is yours or delivery receipts.'),
-        h('p', {}, 'While we review, reports from fewer than 3 different users on this account are hidden.'));
+        h('p', {}, res.shield ? 'While we review, earlier reports on this account from fewer than 3 different users are hidden.' : 'Because an earlier dispute on this account was rejected, the reports stay visible while we review this one.'));
     } catch (err) { msg.replaceChildren(alertBox(err.message)); btn.disabled = false; }
   });
   app.replaceChildren(h('div', { class: 'page' },
     h('h1', {}, 'This is my account'),
-    h('p', { class: 'muted' }, 'If your account was reported unfairly, tell us. A moderator reviews every dispute.'),
+    h('p', { class: 'muted' }, 'If published reports about your account are wrong, tell us. A moderator reviews every dispute.'),
     takedownPolicy(m),
     h('div', { class: 'section' }, form),
   ));
@@ -319,8 +327,10 @@ function takedownPolicy(m) {
     h('h2', { style: 'font-size:1.15rem' }, 'Our dispute and takedown policy'),
     h('ul', {},
       h('li', {}, 'We acknowledge every dispute within ', h('b', {}, '2 working days'), ' and decide within ', h('b', {}, '14 days'), '.'),
-      h('li', {}, 'While a dispute is open, reports from fewer than 3 different users are hidden.'),
-      h('li', {}, 'If the reports are wrong, we remove them and show the account as "Cleared after review".'),
+      h('li', {}, 'You can dispute an account that has published reports. Only one dispute per account can be open at a time.'),
+      h('li', {}, 'While a dispute is open, reports made before it are hidden if fewer than 3 different users reported. Reports from 3 or more users stay visible while we review.'),
+      h('li', {}, 'If the reports are wrong, we remove them and show "Earlier reports removed after review". New reports made after that decision are reviewed and published as normal.'),
+      h('li', {}, 'If a dispute is rejected, a later dispute will not hide reports automatically.'),
       h('li', {}, 'We keep a record of every decision.'),
       h('li', {}, h('b', {}, 'We never charge money'), ' to review, remove or clear a report. Anyone asking you for payment in our name is not us.'),
       h('li', {}, 'Legal notices: ', h('a', { href: 'mailto:' + m.contactEmail }, m.contactEmail)),
@@ -362,33 +372,39 @@ function draftBanner() {
 async function pageTerms() {
   const m = await meta();
   const S = (title, ...items) => h('section', { class: 'card section legal' }, h('h2', {}, title), ...items);
+  const mail = h('a', { href: 'mailto:' + m.contactEmail }, m.contactEmail);
   app.replaceChildren(h('div', { class: 'page' },
     h('h1', {}, 'Terms of Use'),
     draftBanner(),
     S('1. Who we are',
       h('p', {}, 'AkaunWatch is operated by ', h('b', {}, m.operator), ' ("we"). It is a free community service. We are not affiliated with PDRM, Bank Negara Malaysia, MCMC or any bank.')),
     S('2. What the reports are',
-      h('p', {}, 'Reports are written by members of the public about their own experience. They are allegations, not facts verified by us, and they are not a finding that anyone committed an offence. Do not rely on AkaunWatch alone. Always use official channels such as NSRC 997 and PDRM Semak Mule.')),
-    S('3. If you submit a report, you promise that',
+      h('p', {}, 'Reports are written by members of the public about their own experience. They are allegations, not facts verified by us, and they are not a finding that anyone committed an offence. A label such as "Reported by 3 different users" only counts reports that passed moderation. Do not rely on AkaunWatch alone; always use official channels such as NSRC 997 and PDRM Semak Mule.')),
+    S('3. Who may submit reports',
+      h('p', {}, 'You must be 18 or older, or have the consent of a parent or guardian, to submit a report or a dispute.')),
+    S('4. If you submit a report, you promise that',
       h('ul', {},
         h('li', {}, 'it describes your own experience and is true to the best of your knowledge;'),
         h('li', {}, 'you have made a police or NSRC report about it;'),
         h('li', {}, 'you will not name or insult anyone, or include other people’s personal details;'),
         h('li', {}, 'you are not reporting to harass someone, settle a personal dispute or hurt a competitor.')),
-      h('p', {}, 'You are responsible for what you submit. We may edit, refuse, hide or remove any report at our discretion, and we review every report before it is published.')),
-    S('4. Disputes and takedowns',
-      h('p', {}, 'Account holders may dispute reports. We acknowledge disputes within 2 working days and decide within 14 days. While a dispute is open, reports from fewer than 3 different users are hidden. We never charge money to review, remove or clear a report.')),
-    S('5. Not allowed',
+      h('p', {}, 'You are responsible for what you submit. To the extent the law allows, you agree to cover our losses and costs if a claim is made against us because your report was false or broke these terms.')),
+    S('5. What we may do with reports',
+      h('p', {}, 'You allow us to publish, display and store your report on AkaunWatch. A moderator reviews every report before it is published. We may refuse, hide or remove any report, and we may edit a report only to remove personal details, names or wording that breaks these terms. Every edit and decision is recorded.')),
+    S('6. Disputes and takedowns',
+      h('p', {}, `Someone who says they hold a reported account may dispute published reports. We acknowledge disputes within 2 working days and decide within ${m.disputeDays} days. Only one dispute per account can be open at a time. While a dispute is open, reports made before it are hidden if fewer than ${m.shieldReporters} different users reported. If reports are removed after a dispute, later reports are reviewed and published as normal.`),
+      h('p', {}, h('b', {}, 'We never charge money to review, remove or clear a report.'), ' Anyone asking for payment in our name is not us.')),
+    S('7. Not allowed',
       h('ul', {},
-        h('li', {}, 'false or misleading reports;'),
+        h('li', {}, 'false or misleading reports or disputes;'),
         h('li', {}, 'automated access, scraping or bulk copying of the site;'),
         h('li', {}, 'using the site to harass, threaten or expose anyone.'))),
-    S('6. Authorities',
-      h('p', {}, 'We may share information with the police or other authorities when the law requires it, or to help investigate a scam.')),
-    S('7. Liability',
+    S('8. Police, NSRC and banks',
+      h('p', {}, 'We may share reports and related records with PDRM, NSRC, the relevant bank or other authorities when the law requires it or to help them investigate a scam.')),
+    S('9. Liability',
       h('p', {}, 'The service is provided "as is". To the extent the law allows, we are not liable for decisions you make based on the site, including transfers you make or do not make.')),
-    S('8. Law and contact',
-      h('p', {}, 'These terms are governed by the laws of Malaysia. Contact and legal notices: ', h('a', { href: 'mailto:' + m.contactEmail }, m.contactEmail), '.')),
+    S('10. Law and contact',
+      h('p', {}, 'These terms are governed by the laws of Malaysia. Contact and legal notices: ', mail, '.')),
   ));
 }
 
@@ -396,49 +412,63 @@ async function pagePrivacy() {
   const m = await meta();
   const r = m.retention;
   const S = (title, ...items) => h('section', { class: 'card section legal' }, h('h2', {}, title), ...items);
+  const mail = () => h('a', { href: 'mailto:' + m.contactEmail }, m.contactEmail);
+  const years = Math.round(r.reportPublicDays / 365);
   app.replaceChildren(h('div', { class: 'page' },
     h('h1', {}, 'Privacy Notice / Notis Privasi'),
     draftBanner(),
-    h('p', { class: 'muted' }, 'English followed by Bahasa Melayu. Data user: ', m.operator, '. Contact: ', h('a', { href: 'mailto:' + m.contactEmail }, m.contactEmail)),
+    h('p', { class: 'muted' }, 'English followed by Bahasa Melayu. Data user: ', m.operator, '. Contact: ', mail()),
 
-    S('What we collect and why',
+    S('What we collect, where it comes from and why',
       h('ul', {},
-        h('li', {}, h('b', {}, 'Reports: '), 'account number, bank, what happened, amount, date and platform, which are published after moderation. The name shown at transfer and your police/NSRC reference are private and only seen by moderators to check reports.'),
-        h('li', {}, h('b', {}, 'Disputes: '), 'your name, email and explanation, used only to review your dispute.'),
-        h('li', {}, h('b', {}, 'Spam protection: '), 'a one-way scrambled code (hash) made from your internet address. We do not store your internet address itself.'),
-        h('li', {}, h('b', {}, 'Searches: '), 'which account numbers are searched, to show search counts.'))),
-    S('Account holders',
-      h('p', {}, 'If your account number appears in a report, you can see what is published by searching for it, ask us to correct it, or dispute it from the "This is my account" page.')),
+        h('li', {}, h('b', {}, 'Reports (from the reporter): '), 'account number, bank, what happened, description, amount, date and platform. Required: account number, bank, what happened, description and police/NSRC reference. Optional: amount, date, platform and name shown at transfer. Without the required fields we cannot accept a report.'),
+        h('li', {}, h('b', {}, 'Private report details: '), 'the name shown at transfer and the police/NSRC reference. Only moderators see them, to check reports.'),
+        h('li', {}, h('b', {}, 'Data about account holders: '), 'if your account number is in a report, that information came from another user, not from you.'),
+        h('li', {}, h('b', {}, 'Disputes (from the person disputing): '), 'name, email and explanation, all required, used only to review the dispute.'),
+        h('li', {}, h('b', {}, 'Spam protection: '), 'a scrambled code (hash) made from your internet address, used for rate limits. We do not store the address itself, but the code is still treated as personal data.'),
+        h('li', {}, h('b', {}, 'Searches and votes: '), 'which account numbers are searched, and "my deal was fine" votes linked to the scrambled code.'))),
     S('Who sees it',
-      h('p', {}, 'Moderators. The police or other authorities if the law requires it. Our hosting provider stores the data on servers that may be outside Malaysia.')),
+      h('ul', {},
+        h('li', {}, h('b', {}, 'Members of the public: '), 'published report details (account number, bank, what happened, description, amount, date, platform), shown to anyone who searches that account number.'),
+        h('li', {}, h('b', {}, 'Moderators: '), 'everything, to review reports and disputes.'),
+        h('li', {}, h('b', {}, 'Our hosting provider: '), m.hosting, '. We only use providers that protect personal data to a standard at least as high as Malaysian law requires.'),
+        h('li', {}, h('b', {}, 'Our legal advisers, and PDRM, NSRC, banks or other authorities '), 'when the law requires it or to help investigate a scam.'),
+        h('li', {}, 'We do not give a reporter’s private details to the account holder unless the law requires it.'))),
     S('How long we keep it',
       h('ul', {},
-        h('li', {}, `Search records: ${r.searchDays} days.`),
-        h('li', {}, `Dispute email addresses: deleted ${r.disputeEmailDays} days after a decision.`),
-        h('li', {}, `Published reports: removed from public view after about ${Math.round(r.reportDays / 365)} years.`),
-        h('li', {}, 'Moderation records are kept so we can show how decisions were made.'))),
-    S('Your rights',
-      h('p', {}, 'You can ask to access or correct your personal data, or withdraw consent, by emailing ', h('a', { href: 'mailto:' + m.contactEmail }, m.contactEmail), '. We will reply within 21 days. If there is a data breach that affects you, we will notify you and the authorities as required by law.')),
+        h('li', {}, `Search records: ${r.searchDays} days. Votes: ${Math.round(r.voteDays / 365)} years.`),
+        h('li', {}, `Name shown at transfer: deleted ${r.holderNameDays} days after moderation.`),
+        h('li', {}, `Dispute email addresses: deleted ${r.disputeEmailDays} days after the decision.`),
+        h('li', {}, `Published reports: removed from public view after ${years} years.`),
+        h('li', {}, `Reports (including hidden ones and police references), disputes and moderation records: deleted after ${r.recordYears} years, so we have evidence if a decision is challenged.`))),
+    S('Your rights and choices',
+      h('p', {}, 'You can ask to access or correct your personal data, ask us to limit how we use it, or withdraw consent, by emailing ', mail(), '. We reply within 21 days. Account holders can also see what is published by searching for their account number, and dispute it from the "This is my account" page. If there is a data breach that affects you, we will notify you and the authorities as required by law.')),
 
     h('h2', { class: 'section' }, 'Bahasa Melayu'),
-    S('Data yang kami kumpul dan sebabnya',
+    S('Data yang kami kumpul, sumbernya dan sebabnya',
       h('ul', {},
-        h('li', {}, h('b', {}, 'Laporan: '), 'nombor akaun, bank, apa yang berlaku, jumlah, tarikh dan platform, yang disiarkan selepas semakan moderator. Nama yang dipaparkan semasa pindahan dan nombor laporan polis/NSRC adalah sulit dan hanya dilihat oleh moderator.'),
-        h('li', {}, h('b', {}, 'Pertikaian: '), 'nama, e-mel dan penjelasan anda, hanya untuk menyemak pertikaian.'),
-        h('li', {}, h('b', {}, 'Perlindungan spam: '), 'kod sehala (hash) daripada alamat internet anda. Kami tidak menyimpan alamat internet itu sendiri.'),
-        h('li', {}, h('b', {}, 'Carian: '), 'nombor akaun yang dicari, untuk menunjukkan jumlah carian.'))),
-    S('Pemegang akaun',
-      h('p', {}, 'Jika nombor akaun anda ada dalam laporan, anda boleh mencarinya untuk melihat apa yang disiarkan, meminta pembetulan, atau membuat pertikaian melalui halaman "This is my account".')),
+        h('li', {}, h('b', {}, 'Laporan (daripada pelapor): '), 'nombor akaun, bank, apa yang berlaku, penerangan, jumlah, tarikh dan platform. Wajib: nombor akaun, bank, apa yang berlaku, penerangan dan nombor rujukan polis/NSRC. Pilihan: jumlah, tarikh, platform dan nama semasa pindahan. Tanpa maklumat wajib, laporan tidak dapat diterima.'),
+        h('li', {}, h('b', {}, 'Butiran laporan sulit: '), 'nama semasa pindahan dan nombor rujukan polis/NSRC. Hanya moderator yang melihatnya.'),
+        h('li', {}, h('b', {}, 'Data pemegang akaun: '), 'jika nombor akaun anda ada dalam laporan, maklumat itu datang daripada pengguna lain, bukan daripada anda.'),
+        h('li', {}, h('b', {}, 'Pertikaian: '), 'nama, e-mel dan penjelasan (wajib), hanya untuk menyemak pertikaian.'),
+        h('li', {}, h('b', {}, 'Perlindungan spam: '), 'kod (hash) daripada alamat internet anda. Kami tidak menyimpan alamat itu, tetapi kod itu tetap dianggap data peribadi.'),
+        h('li', {}, h('b', {}, 'Carian dan undian: '), 'nombor akaun yang dicari dan undian "my deal was fine".'))),
     S('Siapa yang melihat data',
-      h('p', {}, 'Moderator. Polis atau pihak berkuasa lain jika dikehendaki oleh undang-undang. Penyedia hosting kami mungkin menyimpan data di luar Malaysia.')),
+      h('ul', {},
+        h('li', {}, h('b', {}, 'Orang awam: '), 'butiran laporan yang disiarkan, kepada sesiapa yang mencari nombor akaun itu.'),
+        h('li', {}, h('b', {}, 'Moderator: '), 'semua data, untuk menyemak laporan dan pertikaian.'),
+        h('li', {}, h('b', {}, 'Penyedia hosting kami: '), 'pelayan mungkin berada di luar Malaysia. Kami hanya menggunakan penyedia yang melindungi data sekurang-kurangnya setara dengan undang-undang Malaysia.'),
+        h('li', {}, h('b', {}, 'Penasihat undang-undang, PDRM, NSRC, bank atau pihak berkuasa lain '), 'jika dikehendaki undang-undang atau untuk membantu siasatan penipuan.'),
+        h('li', {}, 'Kami tidak memberi butiran sulit pelapor kepada pemegang akaun kecuali dikehendaki undang-undang.'))),
     S('Tempoh simpanan',
       h('ul', {},
-        h('li', {}, `Rekod carian: ${r.searchDays} hari.`),
+        h('li', {}, `Rekod carian: ${r.searchDays} hari. Undian: ${Math.round(r.voteDays / 365)} tahun.`),
+        h('li', {}, `Nama semasa pindahan: dipadam ${r.holderNameDays} hari selepas semakan moderator.`),
         h('li', {}, `E-mel pertikaian: dipadam ${r.disputeEmailDays} hari selepas keputusan.`),
-        h('li', {}, `Laporan yang disiarkan: dikeluarkan daripada paparan awam selepas kira-kira ${Math.round(r.reportDays / 365)} tahun.`),
-        h('li', {}, 'Rekod moderasi disimpan untuk menunjukkan bagaimana keputusan dibuat.'))),
-    S('Hak anda',
-      h('p', {}, 'Anda boleh meminta akses atau pembetulan data peribadi anda, atau menarik balik persetujuan, dengan menghantar e-mel ke ', h('a', { href: 'mailto:' + m.contactEmail }, m.contactEmail), '. Kami akan membalas dalam masa 21 hari. Jika berlaku pelanggaran data yang menjejaskan anda, kami akan memaklumkan anda dan pihak berkuasa seperti yang dikehendaki undang-undang.')),
+        h('li', {}, `Laporan yang disiarkan: dikeluarkan daripada paparan awam selepas ${years} tahun.`),
+        h('li', {}, `Laporan (termasuk yang disembunyikan dan nombor rujukan polis), pertikaian dan rekod moderasi: dipadam selepas ${r.recordYears} tahun.`))),
+    S('Hak dan pilihan anda',
+      h('p', {}, 'Anda boleh meminta akses atau pembetulan data peribadi, meminta kami mengehadkan penggunaannya, atau menarik balik persetujuan, dengan menghantar e-mel ke ', mail(), '. Kami membalas dalam masa 21 hari. Pemegang akaun juga boleh mencari nombor akaun sendiri dan membuat pertikaian melalui halaman "This is my account". Jika berlaku pelanggaran data yang menjejaskan anda, kami akan memaklumkan anda dan pihak berkuasa seperti yang dikehendaki undang-undang.')),
   ));
 }
 
@@ -446,28 +476,41 @@ async function pageAdmin() {
   let token = '';
   try { token = sessionStorage.getItem('aw_admin') || ''; } catch {}
   const body = h('div');
-  const tokenInput = h('input', { type: 'password', placeholder: 'Admin token', value: token });
+  const tokenInput = h('input', { type: 'password', placeholder: 'Moderator token', value: token });
   const login = h('form', { class: 'search', style: 'margin:0', onsubmit: (e) => { e.preventDefault(); token = tokenInput.value; try { sessionStorage.setItem('aw_admin', token); } catch {} load(); } },
     tokenInput, h('button', { class: 'btn' }, 'Open'));
   app.replaceChildren(h('div', { class: 'section' }, h('h1', {}, 'Moderation'), login, body));
 
   const call = (path, data) => api(path, { method: data ? 'POST' : 'GET', body: data, headers: { 'X-Admin-Token': token } });
-  // Every action asks for a reason, which is stored in the moderation log.
-  const act = (question, fn, required = false) => async (e) => {
-    const note = prompt(question);
+  // Every action needs a reason, which is stored in the moderation log.
+  const act = (question, fn) => async (e) => {
+    const btn = e.currentTarget;
+    const note = prompt(question + '\n\nReason (required, kept in the log):');
     if (note === null) return;
-    if (required && note.trim().length < 5) { alert('Please write a short reason (5+ characters).'); return; }
-    e.target.disabled = true;
-    try { await fn(note); load(); } catch (err) { alert(err.message); e.target.disabled = false; }
+    if (note.trim().length < 5) { alert('Please write a short reason (5+ characters).'); return; }
+    btn.disabled = true;
+    try { await fn(note.trim()); load(); } catch (err) { alert(err.message); btn.disabled = false; }
+  };
+  const edit = (r) => async (e) => {
+    const btn = e.currentTarget;
+    const text = prompt('Edit the description. Only remove names, personal details or accusing words; do not change the facts.', r.description);
+    if (text === null || text === r.description) return;
+    const note = prompt('Reason for the edit (required, kept in the log):');
+    if (!note || note.trim().length < 5) { alert('Please write a short reason (5+ characters).'); return; }
+    btn.disabled = true;
+    try { await call('/api/admin/report-edit', { id: r.id, description: text, note: note.trim() }); load(); } catch (err) { alert(err.message); btn.disabled = false; }
   };
   const reportRow = (r, buttons) => h('tr', { class: r.status === 'hidden' || r.status === 'expired' ? 'dim' : '' },
     h('td', {}, h('a', { href: '#/check/' + r.account }, fmtAcc(r.account)), h('br'), h('small', { class: 'muted' }, r.bank),
       h('br'), h('small', { class: 'muted' }, r.reporters + ' reporter(s) total')),
     h('td', {}, r.categoryLabel, h('br'), h('small', { class: 'muted' }, [r.amount ? rm(r.amount) : null, ago(r.created_at)].filter(Boolean).join(' · ')),
       h('br'), h('small', {}, 'Police/NSRC: ', h('b', {}, r.police_ref || '—')), r.holder_name ? [h('br'), h('small', {}, 'Name: ', r.holder_name)] : null),
-    h('td', { style: 'max-width:360px' }, r.description),
+    h('td', { style: 'max-width:360px' },
+      r.nameInDescription ? h('div', { class: 'flag' }, '⚠ Description may contain the account holder’s name') : null,
+      r.description,
+      r.original_description ? h('div', {}, h('small', { class: 'muted' }, 'Edited. Original: ' + r.original_description)) : null),
     h('td', {}, h('code', {}, r.reporter_hash), h('br'), h('small', { class: 'muted' }, r.status)),
-    h('td', {}, buttons),
+    h('td', { class: 'actions' }, buttons),
   );
   const table = (heads, rows) => h('div', { class: 'table-wrap' }, h('table', {},
     h('thead', {}, h('tr', {}, ...heads.map((t) => h('th', {}, t)))), h('tbody', {}, ...rows)));
@@ -477,39 +520,47 @@ async function pageAdmin() {
     let d;
     try { d = await call('/api/admin/overview'); } catch (e) { body.replaceChildren(h('div', { class: 'section' }, alertBox(e.message))); return; }
     const status = (r, action, label, cls) => h('button', { class: 'btn sm ' + cls,
-      onclick: act(`${label} report #${r.id}. Reason (optional):`, (note) => call('/api/admin/report-status', { id: r.id, action, note })) }, label);
+      onclick: act(`${label} report #${r.id}.`, (note) => call('/api/admin/report-status', { id: r.id, action, note })) }, label);
+    const editBtn = (r) => h('button', { class: 'btn sm ghost', onclick: edit(r) }, 'Edit');
+    const overdue = (x) => x.status === 'pending' && x.days_open >= d.deadline;
+    const needsAck = (x) => x.status === 'pending' && x.days_open >= 2;
 
-    body.replaceChildren(
+    body.replaceChildren(...[
+      h('p', { class: 'muted section' }, 'Signed in as ', h('b', {}, d.you), '. Every action is recorded under this name.'),
       h('section', { class: 'card section' }, h('h2', {}, `Waiting for review (${d.pending.length})`),
-        h('p', { class: 'muted' }, 'Before approving, check that the police/NSRC reference looks real and the description is factual, does not name anyone and does not call anyone a criminal.'),
+        h('p', { class: 'muted' }, 'Before approving, check that the police/NSRC reference looks real and the description is factual, does not name anyone and does not call anyone a criminal. Use Edit to remove names or accusing words.'),
         d.pending.length ? table(['Account', 'Details', 'Description', 'Reporter', ''], d.pending.map((r) =>
-          reportRow(r, [status(r, 'approve', 'Approve', 'ok'), ' ', status(r, 'reject', 'Reject', 'danger')]))) : h('p', { class: 'muted' }, 'Nothing to review.')),
+          reportRow(r, [status(r, 'approve', 'Approve', 'ok'), status(r, 'reject', 'Reject', 'danger'), editBtn(r)]))) : h('p', { class: 'muted' }, 'Nothing to review.')),
 
       h('section', { class: 'card section' }, h('h2', {}, 'Disputes'),
-        h('p', { class: 'muted' }, 'Acknowledge by email within 2 working days. Decide within 14 days.'),
-        d.disputes.length ? table(['Account', 'Owner', 'Explanation', 'Status', ''], d.disputes.map((x) => h('tr', {},
+        h('p', { class: 'muted' }, `Acknowledge by email within 2 working days. Decide within ${d.deadline} days.`),
+        d.disputes.length ? table(['Account', 'Owner', 'Explanation', 'Status', ''], d.disputes.map((x) => h('tr', { class: overdue(x) ? 'overdue' : '' },
           h('td', {}, h('a', { href: '#/check/' + x.account }, fmtAcc(x.account)), h('br'), h('small', { class: 'muted' }, x.bank)),
           h('td', {}, x.name, h('br'), h('small', { class: 'muted' }, x.email)),
-          h('td', { style: 'max-width:340px' }, x.explanation, x.decision_note ? [h('br'), h('small', { class: 'muted' }, 'Decision: ' + x.decision_note)] : null),
-          h('td', {}, x.status, h('br'), h('small', { class: 'muted' }, ago(x.created_at))),
-          h('td', {}, x.status === 'pending' ? [
-            h('button', { class: 'btn sm ok', onclick: act('Clear this account. Reason (kept in log):', (note) => call('/api/admin/dispute', { id: x.id, decision: 'upheld', note }), true) }, 'Clear account'), ' ',
-            h('button', { class: 'btn sm ghost', onclick: act('Reject this dispute. Reason (kept in log):', (note) => call('/api/admin/dispute', { id: x.id, decision: 'rejected', note }), true) }, 'Reject'),
+          h('td', { style: 'max-width:340px' }, x.explanation,
+            !x.shield ? h('div', {}, h('small', { class: 'muted' }, 'Repeat dispute: reports stay visible while reviewing.')) : null,
+            x.decision_note ? h('div', {}, h('small', { class: 'muted' }, 'Decision: ' + x.decision_note)) : null),
+          h('td', {}, x.status, h('br'),
+            h('small', { class: overdue(x) ? 'flag' : 'muted' }, x.status === 'pending'
+              ? `${x.days_open} day(s) open` + (overdue(x) ? ' — OVERDUE' : needsAck(x) ? ' — acknowledged?' : '') : ago(x.resolved_at))),
+          h('td', { class: 'actions' }, x.status === 'pending' ? [
+            h('button', { class: 'btn sm ok', onclick: act('Remove earlier reports on this account (uphold dispute).', (note) => call('/api/admin/dispute', { id: x.id, decision: 'upheld', note })) }, 'Uphold'),
+            h('button', { class: 'btn sm ghost', onclick: act('Reject this dispute (reports stay).', (note) => call('/api/admin/dispute', { id: x.id, decision: 'rejected', note })) }, 'Reject'),
           ] : ''),
         ))) : h('p', { class: 'muted' }, 'No disputes.')),
 
-      d.cleared.length ? h('section', { class: 'card section' }, h('h2', {}, 'Cleared accounts'),
-        ...d.cleared.map((c) => h('p', {}, fmtAcc(c.account), ' — ', c.note || '', ' ',
-          h('button', { class: 'btn sm ghost', onclick: act('Undo clearing. Reason (kept in log):', (note) => call('/api/admin/unclear', { account: c.account, note }), true) }, 'Undo')))) : null,
+      d.cleared.length ? h('section', { class: 'card section' }, h('h2', {}, 'Accounts with earlier reports removed'),
+        ...d.cleared.map((c) => h('p', {}, fmtAcc(c.account), ' — ', c.note || '', ' ', h('small', { class: 'muted' }, ago(c.cleared_at)), ' ',
+          h('button', { class: 'btn sm ghost', onclick: act('Undo: show the earlier reports again.', (note) => call('/api/admin/unclear', { account: c.account, note })) }, 'Undo')))) : null,
 
       h('section', { class: 'card section' }, h('h2', {}, 'Reviewed reports'),
         d.reports.length ? table(['Account', 'Details', 'Description', 'Reporter', ''], d.reports.map((r) =>
-          reportRow(r, r.status === 'visible' ? status(r, 'hide', 'Hide', 'danger') : status(r, 'restore', 'Restore', 'ghost')))) : h('p', { class: 'muted' }, 'None yet.')),
+          reportRow(r, r.status === 'visible' ? [status(r, 'hide', 'Hide', 'danger'), editBtn(r)] : [status(r, 'restore', 'Restore', 'ghost')]))) : h('p', { class: 'muted' }, 'None yet.')),
 
       h('section', { class: 'card section' }, h('h2', {}, 'Moderation log'),
         d.log.length ? table(['When', 'Action', 'Target', 'Reason', 'By'], d.log.map((l) => h('tr', {},
-          h('td', {}, ago(l.created_at)), h('td', {}, l.action), h('td', {}, l.target), h('td', {}, l.note || '—'), h('td', {}, h('code', {}, l.actor_hash || ''))))) : h('p', { class: 'muted' }, 'No actions yet.')),
-    );
+          h('td', {}, ago(l.created_at)), h('td', {}, l.action), h('td', {}, l.target), h('td', {}, l.note || '—'), h('td', {}, l.actor_hash || '')))) : h('p', { class: 'muted' }, 'No actions yet.')),
+    ].filter(Boolean));
   }
   if (token) load();
 }
