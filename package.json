@@ -1,0 +1,14 @@
+{
+  "name": "akaunwatch",
+  "version": "1.0.0",
+  "description": "Community bank account checker — like caller ID, but for bank accounts. Search before you transfer.",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "seed": "node --no-warnings seed.js",
+    "reset": "node --no-warnings -e \"require('fs').rmSync('data',{recursive:true,force:true});console.log('Database removed')\""
+  },
+  "license": "MIT"
+}
